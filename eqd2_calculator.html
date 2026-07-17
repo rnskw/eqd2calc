@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>EQD2 計算表</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1420">
+<meta name="description" content="放射線治療におけるEQD2(2Gy等価線量)を計算するツール">
+
+<!-- iOS Safari: ホーム画面に追加した際にスタンドアロン表示にする -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="EQD2計算表">
+
+<!-- Android Chrome / その他 -->
+<meta name="mobile-web-app-capable" content="yes">
+
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+
+<style>
+  :root{
+    --navy-950:#0b1420;
+    --navy-900:#101d2e;
+    --navy-800:#16283d;
+    --navy-700:#1e3550;
+    --navy-600:#2a4666;
+    --line:#28405c;
+    --cyan:#5fd0d6;
+    --cyan-dim:#2f6b6f;
+    --amber:#e8a94c;
+    --paper:#eef3f6;
+    --paper-dim:#aebdcc;
+    --danger:#d9694f;
+    --mono: 'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    --sans: 'IBM Plex Sans','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;height:100%;
+    background:var(--navy-950);
+    color:var(--paper);
+    font-family:var(--sans);
+    -webkit-tap-highlight-color:transparent;
+    overscroll-behavior:none;
+  }
+  body{
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    height:100dvh;
+  }
+
+  /* ---------- HEADER ---------- */
+  header{
+    flex:0 0 auto;
+    background:linear-gradient(180deg,var(--navy-900),var(--navy-950));
+    border-bottom:1px solid var(--line);
+    padding:14px 18px 12px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .header-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .brand h1{
+    margin:0;
+    font-size:19px;
+    font-weight:600;
+    letter-spacing:.01em;
+    color:var(--paper);
+  }
+  .header-controls{
+    display:flex;
+    align-items:center;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  .mode-control, .ab-control{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .mode-control label, .ab-control label{
+    font-size:11px;
+    color:var(--paper-dim);
+    font-family:var(--mono);
+    letter-spacing:.05em;
+  }
+  .segmented{
+    display:flex;
+    border:1px solid var(--line);
+    border-radius:5px;
+    overflow:hidden;
+  }
+  .seg-btn{
+    background:var(--navy-800);
+    color:var(--paper-dim);
+    border:none;
+    font-family:var(--mono);
+    font-size:12.5px;
+    padding:7px 14px;
+    cursor:pointer;
+    transition:background .12s ease, color .12s ease;
+  }
+  .seg-btn + .seg-btn{
+    border-left:1px solid var(--line);
+  }
+  .seg-btn:hover:not(.active){
+    background:var(--navy-700);
+    color:var(--paper);
+  }
+  .seg-btn.active{
+    background:var(--cyan-dim);
+    color:var(--paper);
+  }
+  select, input[type=number]{
+    background:var(--navy-800);
+    border:1px solid var(--line);
+    color:var(--paper);
+    font-family:var(--mono);
+    font-size:14px;
+    padding:7px 10px;
+    border-radius:4px;
+    outline:none;
+  }
+  select:focus, input[type=number]:focus{
+    border-color:var(--cyan);
+    box-shadow:0 0 0 2px rgba(95,208,214,0.15);
+  }
+  #customAbWrap{
+    display:none;
+    align-items:center;
+    gap:6px;
+  }
+  #customAbWrap.show{ display:flex; }
+  input[type=number]{ width:72px; }
+  .install-btn{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    background:var(--cyan-dim);
+    border:1px solid var(--cyan-dim);
+    color:var(--paper);
+    font-family:var(--mono);
+    font-size:12.5px;
+    padding:7px 14px;
+    border-radius:5px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .install-btn:hover{
+    background:var(--cyan);
+    border-color:var(--cyan);
+    color:var(--navy-950);
+  }
+  .install-btn[hidden]{ display:none; }
+
+  /* ---------- MAIN TABLE AREA ---------- */
+  main{
+    flex:1 1 auto;
+    overflow:hidden;
+    position:relative;
+    background:var(--navy-950);
+  }
+  .scroll-area{
+    position:absolute;
+    inset:0;
+    overflow:auto;
+  }
+  .hint{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--paper-dim);
+  }
+  .zoom-float{
+    display:none;
+    align-items:center;
+    gap:10px;
+    position:absolute;
+    bottom:18px;
+    right:22px;
+    padding:9px 14px;
+    background:var(--navy-800);
+    border:1px solid var(--cyan-dim);
+    border-radius:7px;
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--amber);
+    box-shadow:0 8px 22px rgba(0,0,0,0.5);
+    z-index:50;
+  }
+  .zoom-float.show{ display:flex; }
+  .zoom-float button{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--paper);
+    font-family:var(--mono);
+    font-size:11.5px;
+    padding:5px 10px;
+    border-radius:4px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .zoom-float button:hover{
+    border-color:var(--danger);
+    color:var(--danger);
+  }
+  table{
+    border-collapse:separate;
+    border-spacing:0;
+    font-family:var(--mono);
+    font-size:12.5px;
+    margin:8px 18px 18px;
+  }
+  thead th{
+    position:sticky;
+    top:0;
+    background:var(--navy-800);
+    color:var(--cyan);
+    font-weight:600;
+    padding:8px 10px;
+    border-bottom:1px solid var(--line);
+    border-right:1px solid var(--navy-900);
+    text-align:center;
+    z-index:2;
+    white-space:nowrap;
+  }
+  thead th.corner{
+    left:0;
+    z-index:4;
+    text-align:left;
+    color:var(--paper-dim);
+    font-size:10.5px;
+    letter-spacing:.04em;
+  }
+  tbody th{
+    position:sticky;
+    left:0;
+    background:var(--navy-800);
+    color:var(--amber);
+    font-weight:600;
+    padding:6px 8px;
+    border-right:1px solid var(--line);
+    border-bottom:1px solid var(--navy-900);
+    text-align:right;
+    z-index:1;
+    white-space:nowrap;
+    cursor:pointer;
+  }
+  tbody th.zoomable:hover{
+    background:var(--navy-700);
+    color:var(--cyan);
+  }
+  tbody th.maxed{
+    cursor:default;
+  }
+  .custom-row-head{
+    display:flex;
+    align-items:center;
+    gap:5px;
+    cursor:default;
+  }
+  .custom-dose-input{
+    width:62px;
+    background:var(--navy-900);
+    border:1px solid var(--line);
+    color:var(--amber);
+    font-family:var(--mono);
+    font-size:12.5px;
+    padding:4px 6px;
+    border-radius:3px;
+    text-align:right;
+  }
+  .custom-dose-input:focus{
+    border-color:var(--cyan);
+    outline:none;
+  }
+  .del-row-btn{
+    background:none;
+    border:none;
+    color:var(--paper-dim);
+    cursor:pointer;
+    font-size:15px;
+    line-height:1;
+    padding:2px 3px;
+    flex:0 0 auto;
+  }
+  .del-row-btn:hover{ color:var(--danger); }
+  th.add-row-cell{
+    cursor:default;
+  }
+  .add-row-btn{
+    width:100%;
+    background:none;
+    border:1px dashed var(--line);
+    color:var(--paper-dim);
+    font-family:var(--mono);
+    font-size:12px;
+    padding:6px 8px;
+    border-radius:4px;
+    cursor:pointer;
+    text-align:center;
+    white-space:nowrap;
+  }
+  .add-row-btn:hover{
+    border-color:var(--cyan);
+    color:var(--cyan);
+  }
+  td.add-row-filler{
+    cursor:default;
+    background:var(--navy-950);
+  }
+  td.add-row-filler:hover{
+    background:var(--navy-950);
+  }
+  td{
+    padding:6px 10px;
+    border-bottom:1px solid var(--navy-900);
+    border-right:1px solid var(--navy-900);
+    text-align:right;
+    white-space:nowrap;
+    cursor:pointer;
+    user-select:none;
+    transition:background .12s ease;
+  }
+  td.invalid{
+    cursor:default;
+    color:var(--paper-dim);
+  }
+  td .d-total{
+    color:var(--paper);
+    font-size:12px;
+  }
+  td .d-eqd2{
+    color:var(--cyan);
+    font-size:12px;
+    font-weight:600;
+  }
+  td.invalid .d-total{ color:var(--paper-dim); }
+  td:hover{
+    background:var(--navy-700);
+  }
+  td.invalid:hover{
+    background:none;
+  }
+  td.pressing{
+    background:var(--amber);
+  }
+  td.pressing .d-total, td.pressing .d-eqd2{
+    color:var(--navy-950);
+  }
+  td.saved-flash{
+    animation:flash .5s ease;
+  }
+  @keyframes flash{
+    0%{ background:var(--cyan); }
+    100%{ background:transparent; }
+  }
+
+  /* ---------- HISTORY (FOOTER) ---------- */
+  footer{
+    flex:0 0 auto;
+    max-height:34vh;
+    display:flex;
+    flex-direction:column;
+    background:var(--navy-900);
+    border-top:1px solid var(--line);
+  }
+  .hist-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 18px 8px;
+    flex:0 0 auto;
+  }
+  .hist-head .eyebrow{
+    font-family:var(--mono);
+    font-size:10.5px;
+    letter-spacing:.18em;
+    color:var(--paper-dim);
+    text-transform:uppercase;
+  }
+  #clearHist{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--paper-dim);
+    font-family:var(--mono);
+    font-size:11px;
+    padding:5px 10px;
+    border-radius:4px;
+    cursor:pointer;
+  }
+  #clearHist:hover{
+    border-color:var(--danger);
+    color:var(--danger);
+  }
+  .hist-scroll{
+    overflow-y:auto;
+    padding:0 18px 14px;
+  }
+  #histTable{
+    width:100%;
+    border-collapse:collapse;
+    font-family:var(--mono);
+    font-size:12.5px;
+  }
+  #histTable thead th{
+    position:sticky;
+    top:0;
+    background:var(--navy-900);
+    color:var(--paper-dim);
+    font-weight:500;
+    font-size:10.5px;
+    letter-spacing:.04em;
+    text-align:right;
+    padding:6px 8px;
+    border-bottom:1px solid var(--line);
+    left:auto;
+  }
+  #histTable thead th:first-child{ text-align:left; }
+  #histTable tbody td{
+    padding:6px 8px;
+    text-align:right;
+    border-bottom:1px solid var(--navy-800);
+    cursor:default;
+    white-space:nowrap;
+  }
+  #histTable tbody td:first-child{
+    text-align:left;
+    color:var(--paper-dim);
+    font-size:11px;
+  }
+  #histTable td.eqd2-val{ color:var(--cyan); font-weight:600; }
+  #histTable td.ab-val{ color:var(--paper-dim); }
+  #histTable td.del{ text-align:center; }
+  .del-btn{
+    background:none;
+    border:none;
+    color:var(--paper-dim);
+    cursor:pointer;
+    font-size:14px;
+    padding:2px 6px;
+  }
+  .del-btn:hover{ color:var(--danger); }
+  .empty-row td{
+    text-align:center;
+    color:var(--paper-dim);
+    padding:14px;
+    font-style:normal;
+  }
+
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-track{ background:var(--navy-950); }
+  ::-webkit-scrollbar-thumb{ background:var(--navy-600); border-radius:6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="brand">
+      <h1>EQD2 計算表</h1>
+    </div>
+    <div class="header-controls">
+      <div class="mode-control">
+        <label>モード</label>
+        <div class="segmented" id="modeSegmented">
+          <button type="button" class="seg-btn active" data-mode="standard">標準</button>
+          <button type="button" class="seg-btn" data-mode="custom">カスタム</button>
+        </div>
+      </div>
+      <div class="ab-control">
+        <label for="abSelect">α/β (Gy)</label>
+        <select id="abSelect">
+          <option value="10">10 &mdash; 早期反応組織・腫瘍</option>
+          <option value="3">3 &mdash; 晩期反応組織</option>
+          <option value="1.5">1.5</option>
+          <option value="2">2</option>
+          <option value="4">4</option>
+          <option value="custom">カスタム&hellip;</option>
+        </select>
+        <span id="customAbWrap">
+          <input type="number" id="customAb" min="0.1" step="0.1" value="10">
+        </span>
+      </div>
+      <button type="button" id="installBtn" class="install-btn" hidden>&#128241; インストール</button>
+    </div>
+  </div>
+  <div class="hint" id="hintText"></div>
+</header>
+
+<main>
+  <div class="scroll-area" id="scrollArea">
+    <table id="doseTable"></table>
+  </div>
+  <div class="zoom-float" id="zoomBar">
+    <button id="zoomReset">&times; 拡大表示を解除</button>
+  </div>
+</main>
+
+<footer>
+  <div class="hist-head">
+    <span class="eyebrow">履歴</span>
+    <button id="clearHist">全て削除</button>
+  </div>
+  <div class="hist-scroll">
+    <table id="histTable">
+      <thead>
+        <tr>
+          <th>1回線量 (Gy)</th>
+          <th>回数</th>
+          <th>合計線量 (Gy)</th>
+          <th>EQD2 (Gy)</th>
+          <th>α/β</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="histBody">
+        <tr class="empty-row"><td colspan="6">長押ししたセルがここに表示されます</td></tr>
+      </tbody>
+    </table>
+  </div>
+</footer>
+
+<script>
+(function(){
+  // ---- configuration ----
+  var BASE_DOSE_MIN = 0.5;
+  var BASE_DOSE_MAX = 20.0;
+  var BASE_DOSE_STEP = 0.5;
+  var FX_MIN = 1;
+  var FX_MAX = 40;
+  var LONG_PRESS_MS = 500;
+
+  var abSelect = document.getElementById('abSelect');
+  var customAbWrap = document.getElementById('customAbWrap');
+  var customAbInput = document.getElementById('customAb');
+  var table = document.getElementById('doseTable');
+  var scrollArea = document.getElementById('scrollArea');
+  var histBody = document.getElementById('histBody');
+  var clearHistBtn = document.getElementById('clearHist');
+  var zoomBar = document.getElementById('zoomBar');
+  var zoomResetBtn = document.getElementById('zoomReset');
+  var hintText = document.getElementById('hintText');
+  var modeSegmented = document.getElementById('modeSegmented');
+
+  var fxs = [];
+  for(var n = FX_MIN; n <= FX_MAX; n++){ fxs.push(n); }
+
+  var HINT_STANDARD = 'セルを長押し(0.5秒)すると下部の履歴に保存されます ・ 1回線量の見出しをダブルクリックすると細かい刻みに拡大表示されます ・ 縦=1回線量 / 横=照射回数';
+  var HINT_CUSTOM = 'セルを長押し(0.5秒)すると下部の履歴に保存されます ・ 左端の入力欄に1回線量を自由に入力できます ・ ×で行を削除、「+ 1回線量を追加」で行を追加できます';
+
+  // ---- mode state ----
+  var mode = 'standard'; // 'standard' | 'custom'
+
+  // ---- α/β ----
+  function getAbValue(){
+    if(abSelect.value === 'custom'){
+      var v = parseFloat(customAbInput.value);
+      return (isNaN(v) || v <= 0) ? 10 : v;
+    }
+    return parseFloat(abSelect.value);
+  }
+
+  function calcEqd2(dosePerFx, numFx, ab){
+    var total = dosePerFx * numFx;
+    var eqd2 = total * (dosePerFx + ab) / (2 + ab);
+    return { total: total, eqd2: eqd2 };
+  }
+
+  function fmt(n){
+    return (Math.round(n * 100) / 100).toFixed( (n % 1 === 0) ? 1 : 2 );
+  }
+
+  function fmtAb(n){
+    var r = Math.round(n * 100) / 100;
+    return (r % 1 === 0) ? r.toFixed(1) : String(r);
+  }
+
+  // formats a dose value for display in history: up to 2 decimals, no needless trailing zeros
+  function formatDose(d){
+    var r = Math.round(d * 100) / 100;
+    if(Math.abs(r * 10 - Math.round(r * 10)) < 1e-9){
+      return (Math.round(r * 10) / 10).toFixed(1);
+    }
+    return r.toFixed(2);
+  }
+
+  function decimalsForStep(step){
+    return step <= 0.01 + 1e-9 ? 2 : 1;
+  }
+
+  function generateRange(min, max, step){
+    var decimals = decimalsForStep(step);
+    var factor = Math.pow(10, decimals);
+    var minI = Math.round(min * factor);
+    var maxI = Math.round(max * factor);
+    var stepI = Math.round(step * factor);
+    var arr = [];
+    for(var i = minI; i <= maxI; i += stepI){
+      arr.push(i / factor);
+    }
+    return arr;
+  }
+
+  // ================= STANDARD MODE =================
+  var zoomLevel = 0;          // 0 = normal, 1 = 0.1刻み, 2 = 0.01刻み
+  var currentDoses = generateRange(BASE_DOSE_MIN, BASE_DOSE_MAX, BASE_DOSE_STEP);
+  var currentStep = BASE_DOSE_STEP;
+
+  function buildStandardTable(doses, step){
+    var decimals = decimalsForStep(step);
+    var canZoomFurther = zoomLevel < 2;
+
+    var thead = buildHeadRow();
+    var tbody = document.createElement('tbody');
+    doses.forEach(function(d){
+      var row = document.createElement('tr');
+      var rowHead = document.createElement('th');
+      rowHead.textContent = d.toFixed(decimals);
+      rowHead.dataset.dose = d;
+      if(canZoomFurther){
+        rowHead.classList.add('zoomable');
+        rowHead.title = 'ダブルクリックで拡大表示';
+      } else {
+        rowHead.classList.add('maxed');
+      }
+      row.appendChild(rowHead);
+
+      fxs.forEach(function(fxN){
+        var td = document.createElement('td');
+        td.dataset.dose = d;
+        td.dataset.fx = fxN;
+        row.appendChild(td);
+      });
+      tbody.appendChild(row);
+    });
+
+    table.innerHTML = '';
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    refreshStandardCells();
+  }
+
+  function refreshStandardCells(){
+    var ab = getAbValue();
+    var cells = table.querySelectorAll('tbody td');
+    cells.forEach(function(td){
+      var d = parseFloat(td.dataset.dose);
+      var fxN = parseFloat(td.dataset.fx);
+      var r = calcEqd2(d, fxN, ab);
+      td.innerHTML = '<div class="d-total">' + fmt(r.total) + '</div><div class="d-eqd2">' + fmt(r.eqd2) + '</div>';
+    });
+  }
+
+  function updateZoomBar(){
+    zoomBar.classList.toggle('show', zoomLevel !== 0);
+  }
+
+  function zoomInto(centerDose, fromStep){
+    var newStep, newMin, newMax;
+    if(fromStep >= BASE_DOSE_STEP - 1e-9){
+      newStep = 0.1;
+      newMin = Math.max(0.1, centerDose - BASE_DOSE_STEP);
+      newMax = centerDose + BASE_DOSE_STEP;
+    } else {
+      newStep = 0.01;
+      newMin = Math.max(0.01, centerDose - 0.1);
+      newMax = centerDose + 0.1;
+    }
+    zoomLevel = (newStep === 0.1) ? 1 : 2;
+    currentStep = newStep;
+    currentDoses = generateRange(newMin, newMax, newStep);
+    buildStandardTable(currentDoses, currentStep);
+    updateZoomBar();
+    scrollArea.scrollTop = 0;
+  }
+
+  function resetZoom(){
+    zoomLevel = 0;
+    currentStep = BASE_DOSE_STEP;
+    currentDoses = generateRange(BASE_DOSE_MIN, BASE_DOSE_MAX, BASE_DOSE_STEP);
+    buildStandardTable(currentDoses, currentStep);
+    updateZoomBar();
+  }
+
+  zoomResetBtn.addEventListener('click', resetZoom);
+
+  // ================= CUSTOM MODE =================
+  var customRows = [
+    { id: 1, dose: 2.0 },
+    { id: 2, dose: 2.5 },
+    { id: 3, dose: 3.0 }
+  ];
+  var customIdCounter = 3;
+
+  function buildHeadRow(){
+    var thead = document.createElement('thead');
+    var headRow = document.createElement('tr');
+    var corner = document.createElement('th');
+    corner.className = 'corner';
+    corner.innerHTML = '1回線量 \\ 回数';
+    headRow.appendChild(corner);
+    fxs.forEach(function(fxN){
+      var th = document.createElement('th');
+      th.textContent = fxN;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    return thead;
+  }
+
+  function buildCustomTable(){
+    var thead = buildHeadRow();
+    var tbody = document.createElement('tbody');
+
+    customRows.forEach(function(row){
+      var tr = document.createElement('tr');
+      var rowHead = document.createElement('th');
+
+      var wrap = document.createElement('div');
+      wrap.className = 'custom-row-head';
+
+      var input = document.createElement('input');
+      input.type = 'number';
+      input.step = '0.01';
+      input.min = '0.01';
+      input.className = 'custom-dose-input';
+      input.value = row.dose;
+      input.dataset.rowid = row.id;
+
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'del-row-btn';
+      delBtn.title = '行を削除';
+      delBtn.innerHTML = '&times;';
+      delBtn.dataset.rowid = row.id;
+
+      wrap.appendChild(input);
+      wrap.appendChild(delBtn);
+      rowHead.appendChild(wrap);
+      tr.appendChild(rowHead);
+
+      fxs.forEach(function(fxN){
+        var td = document.createElement('td');
+        td.dataset.fx = fxN;
+        td.dataset.rowid = row.id;
+        td.dataset.dose = row.dose;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+
+    var addRowTr = document.createElement('tr');
+    var addRowTh = document.createElement('th');
+    addRowTh.className = 'add-row-cell';
+    var addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'add-row-btn';
+    addBtn.textContent = '+ 1回線量を追加';
+    addRowTh.appendChild(addBtn);
+    addRowTr.appendChild(addRowTh);
+    fxs.forEach(function(){
+      var filler = document.createElement('td');
+      filler.className = 'add-row-filler';
+      addRowTr.appendChild(filler);
+    });
+    tbody.appendChild(addRowTr);
+
+    table.innerHTML = '';
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    refreshCustomCells();
+  }
+
+  function refreshCustomCells(){
+    var ab = getAbValue();
+    var cells = table.querySelectorAll('tbody td[data-rowid]');
+    cells.forEach(function(td){
+      var d = parseFloat(td.dataset.dose);
+      var fxN = parseFloat(td.dataset.fx);
+      if(isNaN(d) || d <= 0){
+        td.classList.add('invalid');
+        td.innerHTML = '<div class="d-total">&mdash;</div>';
+      } else {
+        td.classList.remove('invalid');
+        var r = calcEqd2(d, fxN, ab);
+        td.innerHTML = '<div class="d-total">' + fmt(r.total) + '</div><div class="d-eqd2">' + fmt(r.eqd2) + '</div>';
+      }
+    });
+  }
+
+  function updateCellsForRow(rowid, doseVal){
+    var ab = getAbValue();
+    var tds = table.querySelectorAll('td[data-rowid="' + rowid + '"]');
+    tds.forEach(function(td){
+      td.dataset.dose = isNaN(doseVal) ? '' : doseVal;
+      if(isNaN(doseVal) || doseVal <= 0){
+        td.classList.add('invalid');
+        td.innerHTML = '<div class="d-total">&mdash;</div>';
+      } else {
+        td.classList.remove('invalid');
+        var fxN = parseFloat(td.dataset.fx);
+        var r = calcEqd2(doseVal, fxN, ab);
+        td.innerHTML = '<div class="d-total">' + fmt(r.total) + '</div><div class="d-eqd2">' + fmt(r.eqd2) + '</div>';
+      }
+    });
+  }
+
+  table.addEventListener('input', function(e){
+    var inp = e.target.closest('.custom-dose-input');
+    if(!inp) return;
+    var rowid = inp.dataset.rowid;
+    var val = parseFloat(inp.value);
+    customRows.forEach(function(r){
+      if(String(r.id) === String(rowid)) r.dose = val;
+    });
+    updateCellsForRow(rowid, val);
+  });
+
+  table.addEventListener('click', function(e){
+    var delBtn = e.target.closest('.del-row-btn');
+    if(delBtn){
+      var rowid = delBtn.dataset.rowid;
+      customRows = customRows.filter(function(r){ return String(r.id) !== String(rowid); });
+      buildCustomTable();
+      return;
+    }
+    var addBtn = e.target.closest('.add-row-btn');
+    if(addBtn){
+      customIdCounter++;
+      var lastDose = customRows.length ? customRows[customRows.length - 1].dose : 1.5;
+      var newDose = Math.round(((isNaN(lastDose) ? 1.5 : lastDose) + 0.5) * 100) / 100;
+      customRows.push({ id: customIdCounter, dose: newDose });
+      buildCustomTable();
+      requestAnimationFrame(function(){ scrollArea.scrollTop = scrollArea.scrollHeight; });
+      return;
+    }
+  });
+
+  // ================= MODE SWITCHING =================
+  function refreshAllCells(){
+    if(mode === 'custom') refreshCustomCells();
+    else refreshStandardCells();
+  }
+
+  function setMode(m){
+    if(m === mode) return;
+    mode = m;
+    Array.prototype.forEach.call(modeSegmented.querySelectorAll('.seg-btn'), function(btn){
+      btn.classList.toggle('active', btn.dataset.mode === m);
+    });
+    if(m === 'standard'){
+      hintText.textContent = HINT_STANDARD;
+      buildStandardTable(currentDoses, currentStep);
+      updateZoomBar();
+    } else {
+      zoomBar.classList.remove('show');
+      hintText.textContent = HINT_CUSTOM;
+      buildCustomTable();
+    }
+  }
+
+  modeSegmented.addEventListener('click', function(e){
+    var btn = e.target.closest('.seg-btn');
+    if(!btn) return;
+    setMode(btn.dataset.mode);
+  });
+
+  table.addEventListener('dblclick', function(e){
+    if(mode !== 'standard') return;
+    var th = e.target.closest('tbody th');
+    if(!th) return;
+    if(!th.classList.contains('zoomable')) return;
+    var d = parseFloat(th.dataset.dose);
+    zoomInto(d, currentStep);
+  });
+
+  // ---- long press handling (both modes) ----
+  var pressTimer = null;
+  var pressingCell = null;
+
+  function startPress(td){
+    var dVal = parseFloat(td.dataset.dose);
+    if(isNaN(dVal) || dVal <= 0) return;
+    cancelPress();
+    pressingCell = td;
+    td.classList.add('pressing');
+    pressTimer = setTimeout(function(){
+      saveToHistory(td);
+      if(pressingCell){ pressingCell.classList.remove('pressing'); }
+      pressTimer = null;
+    }, LONG_PRESS_MS);
+  }
+
+  function cancelPress(){
+    if(pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+    if(pressingCell){ pressingCell.classList.remove('pressing'); pressingCell = null; }
+  }
+
+  table.addEventListener('mousedown', function(e){
+    var td = e.target.closest('td');
+    if(td) startPress(td);
+  });
+  table.addEventListener('mouseup', cancelPress);
+  table.addEventListener('mouseleave', cancelPress);
+  table.addEventListener('touchstart', function(e){
+    var td = e.target.closest('td');
+    if(td) startPress(td);
+  }, {passive:true});
+  table.addEventListener('touchend', cancelPress);
+  table.addEventListener('touchmove', cancelPress);
+  table.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  // ---- history ----
+  var histEntries = [];
+  var histIdCounter = 0;
+
+  function saveToHistory(td){
+    var ab = getAbValue();
+    var d = parseFloat(td.dataset.dose);
+    var fxN = parseFloat(td.dataset.fx);
+    var r = calcEqd2(d, fxN, ab);
+
+    histEntries.unshift({
+      id: ++histIdCounter,
+      dose: d,
+      fx: fxN,
+      total: r.total,
+      eqd2: r.eqd2,
+      ab: ab
+    });
+    renderHistory();
+
+    td.classList.remove('saved-flash');
+    void td.offsetWidth;
+    td.classList.add('saved-flash');
+  }
+
+  function renderHistory(){
+    histBody.innerHTML = '';
+    if(histEntries.length === 0){
+      var tr = document.createElement('tr');
+      tr.className = 'empty-row';
+      tr.innerHTML = '<td colspan="6">長押ししたセルがここに表示されます</td>';
+      histBody.appendChild(tr);
+      return;
+    }
+    histEntries.forEach(function(entry){
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + formatDose(entry.dose) + '</td>' +
+        '<td>' + entry.fx + '</td>' +
+        '<td>' + fmt(entry.total) + '</td>' +
+        '<td class="eqd2-val">' + fmt(entry.eqd2) + '</td>' +
+        '<td class="ab-val">' + fmtAb(entry.ab) + '</td>' +
+        '<td class="del"><button class="del-btn" data-id="' + entry.id + '" title="削除">&times;</button></td>';
+      histBody.appendChild(tr);
+    });
+  }
+
+  histBody.addEventListener('click', function(e){
+    var btn = e.target.closest('.del-btn');
+    if(!btn) return;
+    var id = parseInt(btn.dataset.id, 10);
+    histEntries = histEntries.filter(function(x){ return x.id !== id; });
+    renderHistory();
+  });
+
+  clearHistBtn.addEventListener('click', function(){
+    if(histEntries.length === 0) return;
+    histEntries = [];
+    renderHistory();
+  });
+
+  // ---- alpha/beta controls ----
+  abSelect.addEventListener('change', function(){
+    customAbWrap.classList.toggle('show', abSelect.value === 'custom');
+    refreshAllCells();
+  });
+  customAbInput.addEventListener('input', function(){
+    if(abSelect.value === 'custom') refreshAllCells();
+  });
+
+  // ---- PWA: install prompt ----
+  var installBtn = document.getElementById('installBtn');
+  var deferredInstallPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    installBtn.hidden = false;
+  });
+
+  installBtn.addEventListener('click', function(){
+    if(!deferredInstallPrompt) return;
+    installBtn.hidden = true;
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.finally(function(){
+      deferredInstallPrompt = null;
+    });
+  });
+
+  window.addEventListener('appinstalled', function(){
+    installBtn.hidden = true;
+    deferredInstallPrompt = null;
+  });
+
+  // ---- PWA: service worker registration ----
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('service-worker.js').catch(function(err){
+        console.log('Service worker registration failed:', err);
+      });
+    });
+  }
+
+  // ---- init ----
+  hintText.textContent = HINT_STANDARD;
+  buildStandardTable(currentDoses, currentStep);
+  updateZoomBar();
+})();
+</script>
+
+</body>
+</html>
